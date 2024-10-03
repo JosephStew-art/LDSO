@@ -14,6 +14,10 @@
 #include <map>
 #include <vector>
 #include "exports.h"
+#include <ostream>
+#include <string>
+#include <cstdint>
+
 namespace DBoW3 {
 
 /// Vector of nodes with indexes of local features
