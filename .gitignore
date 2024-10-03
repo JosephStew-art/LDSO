@@ -20,3 +20,7 @@ evaluation/matlab-evaluation/**/*.mat
 
 # python
 **.pyc
+
+# Datasets
+
+Datasets*
