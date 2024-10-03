@@ -28,7 +28,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
 
 # required libs
-find_package(Eigen3 REQUIRED)
+find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 find_package(OpenCV REQUIRED)
 find_package(Glog REQUIRED)
 find_package(Pangolin REQUIRED)
@@ -53,7 +53,6 @@ else()
 endif()
 
 include_directories(
-        ${EIGEN3_INCLUDE_DIR}
         ${OpenCV_INCLUDE_DIR}
         ${Glog_INCLUDE_DIRS}
         ${Pangolin_INCLUDE_DIRS}
@@ -64,7 +63,17 @@ include_directories(
         ${PROJECT_SOURCE_DIR}/thirdparty/DBoW3/
 )
 
+if(TARGET Eigen3::Eigen)
+  # Use the imported target
+  set(EIGEN3_LIBRARIES Eigen3::Eigen)
+else()
+  # Fall back to the old method
+  include_directories(${EIGEN3_INCLUDE_DIR})
+  set(EIGEN3_LIBRARIES)
+endif()
+
 set( THIRD_PARTY_LIBS
+        ${EIGEN3_LIBRARIES}
         ${OpenCV_LIBS}
         ${GLOG_LIBRARY}
         ${Pangolin_LIBRARIES}
