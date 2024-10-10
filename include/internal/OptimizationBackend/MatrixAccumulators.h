@@ -5,7 +5,7 @@
 #include "NumTypes.h"
 
 #if !defined(__SSE3__) && !defined(__SSE2__) && !defined(__SSE1__)
-#include "SSE2NEON.h"
+#include "sse2neon.h"
 #endif
 
 namespace ldso {
