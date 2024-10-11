@@ -11,6 +11,8 @@
 #include <fstream>
 #include <iomanip>
 #include <atomic>
+#include <deque>
+#include <iostream>
 
 using namespace std;
 using namespace ldso;
@@ -27,7 +29,8 @@ public:
         : width(width), height(height), fps(fps), undistorter(undistorter) {
         cap.open(0);
         if (!cap.isOpened()) {
-            LOG(FATAL) << "Cannot open webcam";
+            cerr << "Cannot open webcam" << endl;
+            exit(1);
         }
         cap.set(cv::CAP_PROP_FRAME_WIDTH, width);
         cap.set(cv::CAP_PROP_FRAME_HEIGHT, height);
@@ -37,7 +40,7 @@ public:
     ImageAndExposure* getImage() {
         cv::Mat frame, gray;
         if (!cap.read(frame)) {
-            LOG(WARNING) << "Failed to capture frame";
+            cerr << "Failed to capture frame" << endl;
             return nullptr;
         }
         cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
@@ -93,6 +96,11 @@ int main(int argc, char** argv) {
     clock_t started = clock();
     int numFramesProcessed = 0;
 
+    // FPS and processing time calculation variables
+    const int WINDOW_SIZE = 30;
+    std::deque<double> processing_times;
+    double total_processing_time = 0.0;
+
     signal(SIGINT, sigintHandler);
 
     std::thread runthread([&]() {
@@ -103,14 +111,43 @@ int main(int argc, char** argv) {
             }
             ImageAndExposure* img = webcam.getImage();
             if (img == nullptr) continue;
+
+            // Measure SLAM processing time
+            auto slam_start = std::chrono::high_resolution_clock::now();
+            
             fullSystem->addActiveFrame(img, id);
+            
+            auto slam_end = std::chrono::high_resolution_clock::now();
+            double processing_time = std::chrono::duration<double, std::milli>(slam_end - slam_start).count();
+
+            // Update processing times
+            processing_times.push_back(processing_time);
+            total_processing_time += processing_time;
+
+            if (processing_times.size() > WINDOW_SIZE) {
+                total_processing_time -= processing_times.front();
+                processing_times.pop_front();
+            }
+
             id++;
             numFramesProcessed++;
+
+            // Print average processing time and effective FPS every WINDOW_SIZE frames
+            if (numFramesProcessed % WINDOW_SIZE == 0) {
+                double avg_processing_time = total_processing_time / WINDOW_SIZE;
+                double effective_fps = 1000.0 / avg_processing_time;  // Convert ms to seconds
+
+                cout << "Average processing time: " << fixed << setprecision(2) 
+                     << avg_processing_time << " ms" << endl;
+                cout << "Effective FPS: " << fixed << setprecision(2) 
+                     << effective_fps << endl;
+            }
+
             delete img;
 
             if (fullSystem->initFailed || setting_fullResetRequested) {
                 if (id < 250 || setting_fullResetRequested) {
-                    LOG(INFO) << "RESETTING!";
+                    cout << "RESETTING!" << endl;
                     fullSystem = shared_ptr<FullSystem>(new FullSystem(voc));
                     if (viewer) {
                         viewer->reset();
@@ -121,7 +158,7 @@ int main(int argc, char** argv) {
             }
 
             if (fullSystem->isLost) {
-                LOG(INFO) << "Lost!";
+                cout << "Lost!" << endl;
                 break;
             }
 
@@ -143,19 +180,19 @@ int main(int argc, char** argv) {
         double MilliSecondsTakenMT = ((tv_end.tv_sec - tv_start.tv_sec) * 1000.0f + (tv_end.tv_usec - tv_start.tv_usec) / 1000.0f);
         
         std::ofstream statsFile(output_file + "_stats.txt");
-        statsFile << std::fixed << std::setprecision(1);
-        statsFile << "======================" << std::endl;
-        statsFile << numFramesProcessed << " Frames (" << numFramesProcessed / numSecondsProcessed << " fps)" << std::endl;
-        statsFile << std::setprecision(2);
-        statsFile << MilliSecondsTakenSingle / numFramesProcessed << "ms per frame (single core)" << std::endl;
-        statsFile << MilliSecondsTakenMT / (float) numFramesProcessed << "ms per frame (multi core)" << std::endl;
-        statsFile << std::setprecision(3);
-        statsFile << 1000 / (MilliSecondsTakenSingle / numFramesProcessed) << "x (single core)" << std::endl;
-        statsFile << 1000 / (MilliSecondsTakenMT / numFramesProcessed) << "x (multi core)" << std::endl;
-        statsFile << "======================" << std::endl;
+        statsFile << fixed << setprecision(1);
+        statsFile << "======================" << endl;
+        statsFile << numFramesProcessed << " Frames (" << numFramesProcessed / numSecondsProcessed << " fps)" << endl;
+        statsFile << setprecision(2);
+        statsFile << MilliSecondsTakenSingle / numFramesProcessed << "ms per frame (single core)" << endl;
+        statsFile << MilliSecondsTakenMT / (float) numFramesProcessed << "ms per frame (multi core)" << endl;
+        statsFile << setprecision(3);
+        statsFile << 1000 / (MilliSecondsTakenSingle / numFramesProcessed) << "x (single core)" << endl;
+        statsFile << 1000 / (MilliSecondsTakenMT / numFramesProcessed) << "x (multi core)" << endl;
+        statsFile << "======================" << endl;
         statsFile.close();
 
-        LOG(INFO) << "Results and statistics saved.";
+        cout << "Results and statistics saved." << endl;
     });
 
     if (viewer)
@@ -163,6 +200,6 @@ int main(int argc, char** argv) {
 
     runthread.join();
 
-    LOG(INFO) << "EXIT NOW!";
+    cout << "EXIT NOW!" << endl;
     return 0;
 }
